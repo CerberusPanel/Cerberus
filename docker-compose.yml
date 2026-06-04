@@ -1,0 +1,36 @@
+services:
+  cerberus-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    working_dir: /app/backend
+    network_mode: host
+    volumes:
+      - ./backend:/app/backend
+      - ./data:/app/data
+      - ../Cerberus-App-Store:/app/app-store
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/os-release:/host/etc/os-release:ro
+    environment:
+      - HOST_OS_RELEASE_PATH=/host/etc/os-release
+      - APP_STORE_REPOSITORY_PATH=/app/app-store
+      - AUTH_TOKEN_TTL_SECONDS=28800
+      - MASTER_USERNAME=${MASTER_USERNAME:-admin}
+      - MASTER_PASSWORD=${MASTER_PASSWORD:-change-me}
+      - MASTER_DISPLAY_NAME=${MASTER_DISPLAY_NAME:-Master Admin}
+    command: >-
+      sh -c 'if [ -r /host/etc/os-release ]; then . /host/etc/os-release; elif [ -r /host/usr/lib/os-release ]; then . /host/usr/lib/os-release; fi;
+      export HOST_OS_NAME_OVERRIDE="$${PRETTY_NAME:-$${NAME:-}}";
+      npm install && npm run start'
+
+  cerberus-frontend:
+    image: node:22-alpine
+    working_dir: /app/frontend
+    volumes:
+      - ./frontend:/app/frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:3000/api
+      - VITE_WS_URL=ws://localhost:3000/ws
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
