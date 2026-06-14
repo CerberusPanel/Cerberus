@@ -28,9 +28,12 @@ prompt_value() {
 	local prompt_default="${3:-}"
 	local value=""
 
-	echo
-	echo "=== ${prompt_title} ==="
-	echo "${prompt_desc}"
+	{
+		echo
+		echo "=== ${prompt_title} ==="
+		echo "${prompt_desc}"
+	} >/dev/tty
+
 	read -r -p "[${prompt_default}]: " value </dev/tty
 
 	printf '%s\n' "${value:-$prompt_default}"
@@ -42,19 +45,21 @@ prompt_secret() {
 	local value=""
 
 	while true; do
-		echo
-		echo "=== ${prompt_title} ==="
-		echo "${prompt_desc}"
+		{
+			echo
+			echo "=== ${prompt_title} ==="
+			echo "${prompt_desc}"
+		} >/dev/tty
 
 		read -r -s -p "> " value </dev/tty
-		echo
+		echo >/dev/tty
 
 		if [[ -n "${value}" ]]; then
 			printf '%s\n' "${value}"
 			return
 		fi
 
-		echo "Value cannot be empty."
+		echo "Value cannot be empty." >/dev/tty
 	done
 }
 
