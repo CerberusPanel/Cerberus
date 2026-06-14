@@ -6,14 +6,19 @@ const {
   authenticateSystemAccount,
   clearAuthCookie,
   createAuthToken,
-  decryptLoginPayload,
   decryptLoginPassword,
-  getLoginPublicKey,
   getSystemUserProfile,
   getTokenFromRequest,
   setAuthCookie,
   verifyAuthToken,
 } = require("../services/auth.service");
+
+function logLoginFailure(code, { username = "", detail = "" } = {}) {
+  const safeUsername = username ? `"${username}"` : "<missing>";
+  const suffix = detail ? ` detail="${detail}"` : "";
+
+  console.warn(`[auth] login failed code=${code} username=${safeUsername}${suffix}`);
+}
 
 // User login route
 router.post("/login", async (req, res) => {
@@ -25,6 +30,7 @@ router.post("/login", async (req, res) => {
 
     // Check that the form has been submitted fullt.
     if (!username || (!encryptedPassword && !plainPassword)) {
+      logLoginFailure("AUTH_LOGIN_MISSING_CREDENTIALS", { username });
       return res.status(400).json({
         debugCode: "AUTH_LOGIN_MISSING_CREDENTIALS",
         error: "Username and password are required",
@@ -37,6 +43,10 @@ router.post("/login", async (req, res) => {
 
     // check if there is a resolved username and decrypted password
     if (!resolvedUsername || !password) {
+      logLoginFailure("AUTH_LOGIN_PASSWORD_DECRYPTION_FAILED", {
+        username: resolvedUsername || username,
+        detail: encryptedPassword ? "Unable to decrypt the supplied password payload" : "Password was empty",
+      });
       // return error if no username or password
       return res.status(401).json({
         debugCode: "AUTH_LOGIN_CREDENTIALS_NOT_FOUND",
@@ -56,6 +66,10 @@ router.post("/login", async (req, res) => {
       expiresAt: payload.exp,
     });
   } catch (error) {
+    logLoginFailure(error?.code ?? "AUTH_LOGIN_INVALID_CREDENTIALS", {
+      username: String(req.body?.username ?? "").trim(),
+      detail: error?.message ?? "Authentication rejected",
+    });
     return res.status(401).json({
       debugCode: "AUTH_LOGIN_INVALID_CREDENTIALS",
       error: "Invalid credentials",

@@ -21,70 +21,59 @@ It is designed for homelabs, personal servers, and small self-hosted environment
 .
 ├── backend/        Express API, auth, Docker/system integrations, app store sync
 ├── frontend/       Vue 3 + Vite dashboard
-├── Dockerfile      Production-style combined image
-├── docker-compose.yml
+├── install.sh      One-line installer entrypoint
+├── scripts/        Host install implementation
 └── STATUS.md       Current feature progress
 ```
 
 ## Requirements
 
-- Node.js 22+
-- npm
-- Docker
-- Access to `/var/run/docker.sock` if you want Docker/container features
+- Debian or Ubuntu Linux
+- `systemd`
+- `sudo`
+- Internet access during installation
+- Docker installed on the host if you want the Docker/container features to show live data
 
-## Quick Start With Docker Compose
+## Install
 
-Create optional environment overrides:
-
-```bash
-export MASTER_USERNAME=admin
-export MASTER_PASSWORD=change-me
-export MASTER_DISPLAY_NAME="Master Admin"
-```
-
-Start the development stack:
+Run the installer from the repository root:
 
 ```bash
-docker compose up --build
+curl -fsSL https://raw.githubusercontent.com/CerberusPanel/Cerberus/refs/heads/Release/install.sh | bash
 ```
 
-Open:
+The installer prompts for:
+
+- Install directory
+- Master username
+- Master password
+- Master display name
+
+After installation, open:
 
 ```text
-http://localhost:5173
+http://localhost:4000
 ```
 
-For access from another device on your network, use your server IP:
-
-```text
-http://<server-ip>:5173
-```
-
-## Build A Single Docker Image
-
-From the repository root:
+The service is managed by systemd:
 
 ```bash
-docker build -t ryvor/cerberus-panel .
+systemctl status cerberus
 ```
 
-Run it with access to Docker:
+The management CLI is available as:
 
 ```bash
-docker run --rm -p 3000:3000 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -e MASTER_USERNAME=admin \
-  -e MASTER_PASSWORD=change-me \
-  -e MASTER_DISPLAY_NAME="Master Admin" \
-  ryvor/cerberus-panel
+cerberus start
+cerberus stop
+cerberus status
+cerberus reboot
+cerberus restart
+cerberus update
+cerberus uninstall
 ```
 
-Open:
-
-```text
-http://localhost:3000
-```
+`cerberus reboot` is an alias for restart. `cerberus update` pulls the latest code into the installed checkout, rebuilds the frontend, and restarts the service.
 
 ## Local Development
 
@@ -116,14 +105,16 @@ http://<server-ip>:5173
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `PORT` | `3000` | Backend API and production frontend port. |
-| `MASTER_USERNAME` | `admin` in compose | Initial master account username. |
-| `MASTER_PASSWORD` | `change-me` in compose | Initial master account password. |
-| `MASTER_DISPLAY_NAME` | `Master Admin` in compose | Initial master account display name. |
+| `PORT` | `3000` | Backend API port. The installer sets this to `4000` for the system service. |
+| `DATA_DIR` | `data` | Directory used for the SQLite database and auth secrets. |
+| `MASTER_USERNAME` | `admin` in installer | Initial master account username. |
+| `MASTER_PASSWORD` | `change-me` in installer | Initial master account password. |
+| `MASTER_DISPLAY_NAME` | `Master Admin` in installer | Initial master account display name. |
 | `AUTH_TOKEN_TTL_SECONDS` | `28800` | Session lifetime in seconds. |
-| `APP_STORE_REPOSITORY_URL` | Official Cerberus app store in compose | Default app store repository. |
-| `APP_STORE_REPOSITORY_BRANCH` | `Development` in compose | Default app store branch. |
+| `APP_STORE_REPOSITORY_URL` | Official Cerberus app store in installer | Default app store repository. |
+| `APP_STORE_REPOSITORY_BRANCH` | `Development` in installer | Default app store branch. |
 | `HOST_OS_RELEASE_PATH` | unset | Optional path to host OS release metadata. |
+| `AUTH_COOKIE_SECURE` | unset | Force secure cookies when running behind HTTPS. |
 
 ### Frontend
 

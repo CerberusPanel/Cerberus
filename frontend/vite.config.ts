@@ -61,9 +61,6 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
-    allowedHosts: [
-      "chimera-1.tailc00705.ts.net"
-    ]
   },
   preview: {
     host: '0.0.0.0',

@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const fs = require("node:fs");
+const path = require("node:path");
 const { WebSocketServer } = require("ws");
 
 const { noCacheMiddleware } = require("./middleware/noCacheMiddleware");
@@ -18,6 +20,8 @@ const { createWebSocketHandler } = require("./services/websocket.service");
 const { ensureOfficialStore } = require("./services/store-sync.service")
 
 const PORT = Number(process.env.PORT ?? 3000);
+const PUBLIC_DIR = path.join(__dirname, "../public");
+const PUBLIC_INDEX = path.join(PUBLIC_DIR, "index.html");
 
 void (async () => {
   initSchema();
@@ -32,9 +36,20 @@ void (async () => {
     origin: true,
   }));
   app.use(express.json());
+
+  if (fs.existsSync(PUBLIC_DIR)) {
+    app.use(express.static(PUBLIC_DIR));
+    app.get(/^\/(?!api\/|ws$).*/, (req, res, next) => {
+      if (req.method !== "GET" || !fs.existsSync(PUBLIC_INDEX)) {
+        return next();
+      }
+
+      return res.sendFile(PUBLIC_INDEX);
+    });
+  }
+
   app.use(noCacheMiddleware);
   app.use(requireAuth);
-  app.use(express.static("public"));
 
   app.use("/api/health", healthRoutes);
   app.use("/api/auth", authRoutes);

@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SERVICE_NAME="cerberus"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+ENV_FILE="/etc/cerberus/cerberus.env"
+CLI_TARGET="/usr/local/bin/cerberus"
+DEFAULT_INSTALL_DIR="/opt/cerberus"
+
+if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
+  exec sudo -E "$0" "$@"
+fi
+
+die() {
+  echo "cerberus: $*" >&2
+  exit 1
+}
+
+load_env() {
+  if [[ -r "${ENV_FILE}" ]]; then
+    # shellcheck disable=SC1090
+    source "${ENV_FILE}"
+  fi
+}
+
+get_install_dir() {
+  load_env
+  printf '%s\n' "${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
+}
+
+service_action() {
+  local action="$1"
+  systemctl "${action}" "${SERVICE_NAME}.service"
+}
+
+confirm() {
+  local prompt="$1"
+  local response=""
+
+  read -r -p "${prompt} [y/N]: " response
+  [[ "${response,,}" == "y" || "${response,,}" == "yes" ]]
+}
+
+rebuild_install() {
+  local install_dir="$1"
+
+  [[ -d "${install_dir}" ]] || die "install directory not found: ${install_dir}"
+  [[ -d "${install_dir}/.git" ]] || die "install directory is not a git checkout: ${install_dir}"
+
+  git -C "${install_dir}" pull --ff-only
+
+  cd "${install_dir}/backend"
+  npm ci --omit=dev
+
+  cd "${install_dir}/frontend"
+  npm ci
+  npm run build
+
+  rm -rf "${install_dir}/backend/public"
+  mkdir -p "${install_dir}/backend/public"
+  cp -a "${install_dir}/frontend/dist/." "${install_dir}/backend/public/"
+}
+
+update_service() {
+  local install_dir
+  install_dir="$(get_install_dir)"
+
+  rebuild_install "${install_dir}"
+  service_action restart
+
+  echo "Cerberus updated and restarted."
+}
+
+uninstall_service() {
+  local install_dir
+  install_dir="$(get_install_dir)"
+
+  confirm "Remove Cerberus Panel, its service, and all installed data?" || exit 1
+
+  service_action stop || true
+  systemctl disable "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
+  rm -f "${SERVICE_FILE}"
+  rm -f "${ENV_FILE}"
+  rmdir /etc/cerberus >/dev/null 2>&1 || true
+  rm -rf "${install_dir}"
+  rm -rf /var/lib/cerberus
+  userdel -r cerberus >/dev/null 2>&1 || true
+  groupdel cerberus >/dev/null 2>&1 || true
+  rm -f "${CLI_TARGET}"
+
+  systemctl daemon-reload
+  echo "Cerberus uninstalled."
+}
+
+case "${1:-}" in
+  start)
+    service_action start
+    ;;
+  stop)
+    service_action stop
+    ;;
+  reboot|restart)
+    service_action restart
+    ;;
+  status)
+    service_action status
+    ;;
+  update)
+    update_service
+    ;;
+  uninstall)
+    uninstall_service
+    ;;
+  ""|-h|--help|help)
+    cat <<'EOF'
+Usage: cerberus <start|stop|reboot|restart|status|update|uninstall>
+EOF
+    ;;
+  *)
+    die "unknown command: $1"
+    ;;
+esac
