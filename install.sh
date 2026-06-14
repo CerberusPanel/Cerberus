@@ -165,7 +165,7 @@ MASTER_DISPLAY_NAME=$(quote_env_value "${master_display_name}")
 APP_STORE_REPOSITORY_URL=$(quote_env_value "https://github.com/CerberusPanel/AppStore")
 APP_STORE_REPOSITORY_BRANCH=$(quote_env_value "Development")
 HOST_OS_RELEASE_PATH=$(quote_env_value "/etc/os-release")
-	EOF
+EOF
 	chmod 600 "${ENV_FILE}"
 }
 
@@ -193,7 +193,7 @@ UMask=0027
 
 [Install]
 WantedBy=multi-user.target
-	EOF
+EOF
 }
 
 main() {
