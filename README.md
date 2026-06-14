@@ -49,6 +49,8 @@ The installer prompts for:
 - Master password
 - Master display name
 
+If Cerberus was already installed before, the installer pre-fills those values from the existing configuration. Press Enter to keep the current password.
+
 After installation, open:
 
 ```text

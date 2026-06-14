@@ -30,6 +30,21 @@ CLI_TARGET="/usr/local/bin/cerberus"
 SERVICE_USER="cerberus"
 SERVICE_GROUP="cerberus"
 APP_PORT_DEFAULT="4000"
+EXISTING_INSTALL_DETECTED="false"
+
+load_previous_install_defaults() {
+	if [[ -r "${ENV_FILE}" ]]; then
+		# shellcheck disable=SC1090
+		source "${ENV_FILE}"
+		EXISTING_INSTALL_DETECTED="true"
+	fi
+
+	INSTALL_DIR_DEFAULT="${INSTALL_DIR:-${INSTALL_DIR_DEFAULT}}"
+	DATA_DIR_DEFAULT="${DATA_DIR:-${DATA_DIR_DEFAULT}}"
+	MASTER_USERNAME_DEFAULT="${MASTER_USERNAME:-admin}"
+	MASTER_PASSWORD_DEFAULT="${MASTER_PASSWORD:-}"
+	MASTER_DISPLAY_NAME_DEFAULT="${MASTER_DISPLAY_NAME:-Master Admin}"
+}
 
 
 prompt_value() {
@@ -52,6 +67,7 @@ prompt_value() {
 prompt_secret() {
 	local prompt_title="$1"
 	local prompt_desc="$2"
+	local prompt_default="${3:-}"
 	local value=""
 
 	while true; do
@@ -59,6 +75,9 @@ prompt_secret() {
 			echo
 			echo -e "${BOLD}${CYAN}=== ${prompt_title} ===${NC}"
 			echo -e "${DIM}${prompt_desc}${NC}"
+			if [[ -n "${prompt_default}" ]]; then
+				echo -e "${DIM}(Press Enter to keep the current value.)${NC}"
+			fi
 		} >/dev/tty
 
 		read -r -s -p "> " value </dev/tty
@@ -66,6 +85,11 @@ prompt_secret() {
 
 		if [[ -n "${value}" ]]; then
 			printf '%s\n' "${value}"
+			return
+		fi
+
+		if [[ -n "${prompt_default}" ]]; then
+			printf '%s\n' "${prompt_default}"
 			return
 		fi
 
@@ -244,7 +268,12 @@ main() {
 	ensure_root
 	ensure_linux
 	ensure_package_manager
+	load_previous_install_defaults
 	clear;
+
+	if [[ "${EXISTING_INSTALL_DETECTED}" == "true" ]]; then
+		info "Existing installation detected. Previous values will be used as defaults."
+	fi
 
 	cat <<'EOF'
 
@@ -282,11 +311,11 @@ main() {
 EOF
 
 	local install_dir master_username master_password master_display_name
-	
+
 	install_dir="$(prompt_value "Install directory" "Where should Cerberus be installed?" "${INSTALL_DIR_DEFAULT}")"
-	master_username="$(prompt_value "Master username" "Choose the admin username for logging into Cerberus." "admin")"
-	master_password="$(prompt_secret "Master password" "Choose the admin password for logging into Cerberus.")"
-	master_display_name="$(prompt_value "Master display name" "Display name shown for the main admin account." "Master Admin")"
+	master_username="$(prompt_value "Master username" "Choose the admin username for logging into Cerberus." "${MASTER_USERNAME_DEFAULT}")"
+	master_password="$(prompt_secret "Master password" "Choose the admin password for logging into Cerberus." "${MASTER_PASSWORD_DEFAULT}")"
+	master_display_name="$(prompt_value "Master display name" "Display name shown for the main admin account." "${MASTER_DISPLAY_NAME_DEFAULT}")"
 
 	info "Installing prerequisites"
 	install_prerequisites
