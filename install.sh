@@ -4,6 +4,16 @@ set -euo pipefail
 REPO_URL="https://github.com/CerberusPanel/Cerberus.git"
 REPO_BRANCH="Release"
 TMP_DIR="$(mktemp -d)"
+BOLD='\033[1m'
+DIM='\033[2m'
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+
+NC='\033[0m'
 
 cleanup() {
 	rm -rf "${TMP_DIR}"
@@ -30,8 +40,8 @@ prompt_value() {
 
 	{
 		echo
-		echo "=== ${prompt_title} ==="
-		echo "${prompt_desc}"
+		echo -e "${BOLD}${CYAN}=== ${prompt_title} ===${NC}"
+		echo -e "${DIM}${prompt_desc}${NC}"
 	} >/dev/tty
 
 	read -r -p "[${prompt_default}]: " value </dev/tty
@@ -47,8 +57,8 @@ prompt_secret() {
 	while true; do
 		{
 			echo
-			echo "=== ${prompt_title} ==="
-			echo "${prompt_desc}"
+			echo -e "${BOLD}${CYAN}=== ${prompt_title} ===${NC}"
+			echo -e "${DIM}${prompt_desc}${NC}"
 		} >/dev/tty
 
 		read -r -s -p "> " value </dev/tty
@@ -72,21 +82,21 @@ quote_env_value() {
 
 ensure_root() {
 	if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
-		echo "Run this installer as root or via sudo."
+		error "Run this installer as root or via sudo."
 		exit 1
 	fi
 }
 
 ensure_linux() {
 	if [[ "$(uname -s)" != "Linux" ]]; then
-		echo "This installer only supports Linux."
+		error "This installer only supports Linux."
 		exit 1
 	fi
 }
 
 ensure_package_manager() {
 	if ! command -v apt-get >/dev/null 2>&1; then
-		echo "This installer currently supports Debian/Ubuntu style systems with apt-get."
+		error "This installer currently supports Debian/Ubuntu style systems with apt-get."
 		exit 1
 	fi
 }
@@ -105,11 +115,11 @@ install_node_if_needed() {
 	fi
 
 	if [[ "${node_major}" -ge 22 ]]; then
-		echo "    Node found: ${node_major}"
+		success "    Node found: ${node_major}"
 		return
 	fi
 
-	echo "Installing Node.js 22 from NodeSource..."
+	info "Installing Node.js 22 from NodeSource..."
 	curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 	apt-get install -y nodejs
 }
@@ -213,10 +223,23 @@ WantedBy=multi-user.target
 EOF
 }
 
-info()    { echo "[INFO] $*"; }
-success() { echo "[ OK ] $*"; }
-warn()    { echo "[WARN] $*"; }
-error()   { echo "[FAIL] $*"; }
+info() {
+	echo -e "${BLUE}[INFO]${NC} $*"
+}
+
+success() {
+	echo -e "${GREEN}[ OK ]${NC} $*"
+}
+
+warn() {
+	echo -e "${YELLOW}[WARN]${NC} $*"
+}
+
+error() {
+	echo -e "${RED}[FAIL]${NC} $*"
+}
+
+
 main() {
 	ensure_root
 	ensure_linux
@@ -265,11 +288,11 @@ EOF
 	master_password="$(prompt_secret "Master password" "Choose the admin password for logging into Cerberus.")"
 	master_display_name="$(prompt_value "Master display name" "Display name shown for the main admin account." "Master Admin")"
 
-	echo "Installing prerequisites"
+	info "Installing prerequisites"
 	install_prerequisites
-	echo "Cloning repo"
+	info "Cloning repo"
 	clone_repository
-	echo "Checking if node is present"
+	info "Checking if node is present"
 	install_node_if_needed
 
 	if command -v npm >/dev/null 2>&1; then
@@ -277,30 +300,30 @@ EOF
 		npm config set update-notifier false >/dev/null 2>&1 || true
 	fi
 
-	echo "Creating service"
+	info "Creating service"
 	create_service_user
 
 	mkdir -p "${DATA_DIR_DEFAULT}"
 	chown -R "${SERVICE_USER}:${SERVICE_GROUP}" /var/lib/cerberus
 
-	echo "Building the app"
+	info "Building the app"
 	build_and_install_app "${install_dir}"
 	chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${install_dir}"
-	echo "Writing environment vars"
+	info "Writing environment vars"
 	write_env_file "${install_dir}" "${master_username}" "${master_password}" "${master_display_name}"
-	echo "Writing service file"
+	info "Writing service file"
 	write_service_file "${install_dir}"
 
-	echo "Installing CLI"
+	info "Installing CLI"
 	install_cli
 
 	systemctl daemon-reload
 	systemctl enable --now cerberus.service
 
 	echo
-	echo "Cerberus Panel installed."
-	echo "Open: http://localhost:${APP_PORT_DEFAULT}"
-	echo "Service: systemctl status cerberus"
+	success "Cerberus Panel installed."
+	info "Open: http://localhost:${APP_PORT_DEFAULT}"
+	info "Service: systemctl status cerberus"
 }
 
 main "$@"
