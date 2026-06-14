@@ -231,7 +231,7 @@ main() {
   ,-----.              ,--.
  '  .--./ ,---. ,--.--.|  |-.  ,---. ,--.--.,--.,--. ,---.
  |  |    | .-. :|  .--'| .-. '| .-. :|  .--'|  ||  |(  .-'
- '  '--'\   --.|  |   | `-' |\   --.|  |   '  ''  '.-'  `)
+ '  '--'\\   --.|  |   | `-' |\   --.|  |   '  ''  '.-'  `)
   `-----' `----'`--'    `---'  `----'`--'    `----' `----'
 
 ===== Cerberus Panel installer =====
@@ -244,10 +244,10 @@ EOF
 	master_password="$(prompt_secret "Master password")"
 	master_display_name="$(prompt_value "Master display name" "Master Admin")"
 
+	echo "Installing prerequisites"
+	install_prerequisites
 	echo "Cloning repo"
 	clone_repository
-	echo "Installing Prerequisits"
-	install_prerequisites
 	echo "Checking if node is present"
 	install_node_if_needed
 
@@ -267,7 +267,7 @@ EOF
 	chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${install_dir}"
 	echo "Writing environment vars"
 	write_env_file "${install_dir}" "${master_username}" "${master_password}" "${master_display_name}"
-	echo ""Writing service file
+	echo "Writing service file"
 	write_service_file "${install_dir}"
 
 	echo "Installing CLI"
