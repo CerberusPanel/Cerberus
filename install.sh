@@ -28,10 +28,11 @@ prompt_value() {
 	local prompt_default="$3"
 	local value=""
 
-	printf ""
-	printf "=== ${prompt_title} ==="
-	printf "${prompt_desc}"
+	echo
+	echo "=== ${prompt_title} ==="
+	echo "${prompt_desc}"
 	read -r -p "[${prompt_default}]: " value </dev/tty
+
 	printf '%s\n' "${value:-$prompt_default}"
 }
 
@@ -41,11 +42,13 @@ prompt_secret() {
 	local value=""
 
 	while true; do
-		echo ""
+		echo
 		echo "=== ${prompt_title} ==="
 		echo "${prompt_desc}"
-		read -r -s -p ": " value </dev/tty
-		printf '\n'
+
+		read -r -s -p "> " value </dev/tty
+		echo
+
 		if [[ -n "${value}" ]]; then
 			printf '%s\n' "${value}"
 			return
@@ -205,6 +208,10 @@ WantedBy=multi-user.target
 EOF
 }
 
+info()    { echo "[INFO] $*"; }
+success() { echo "[ OK ] $*"; }
+warn()    { echo "[WARN] $*"; }
+error()   { echo "[FAIL] $*"; }
 main() {
 	ensure_root
 	ensure_linux
@@ -248,13 +255,10 @@ EOF
 
 	local install_dir master_username master_password master_display_name
 	
-	install_dir="$(prompt_value "Install directory" "description" "${INSTALL_DIR_DEFAULT}")"
-	
-	master_username="$(prompt_value "Master username" "description" "admin")"
-	
-	master_password="$(prompt_secret "Master password" "description")"
-
-	master_display_name="$(prompt_value "Master display name" "description" "Master Admin")"
+	install_dir="$(prompt_value "Install directory" "Where should Cerberus be installed?" "${INSTALL_DIR_DEFAULT}")"
+	master_username="$(prompt_value "Master username" "The administrator username used to access Cerberus." "admin")"
+	master_password="$(prompt_secret "Master password" "The administrator password used to access Cerberus.")"
+	master_display_name="$(prompt_value "Master display name" "The administrator's name." "Master Admin")"
 
 	echo "Installing prerequisites"
 	install_prerequisites
