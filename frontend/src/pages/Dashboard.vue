@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
-import { fetchSystemStatus, type MonitoringResponse, type SystemInfoResponse, type SystemStatusResponse } from '../services/api'
-import { useAuthStore } from '../stores/auth'
+import { onClickOutside, useEventListener } from '@vueuse/core'
+import {
+  fetchInstalledApps,
+  fetchSystemStatus,
+  type InstalledAppRecord,
+  type MonitoringResponse,
+  type SystemInfoResponse,
+  type SystemStatusResponse,
+} from '../services/api'
 
 type MonitorMode = 'disk' | 'network'
 
@@ -30,11 +37,13 @@ type RadialMetric = {
 
 const systemInfo = ref<SystemInfoResponse | null>(null)
 const systemStatus = ref<SystemStatusResponse | null>(null)
+const installedApps = ref<InstalledAppRecord[]>([])
 const monitorMode = ref<MonitorMode>('disk')
 const monitorDevice = ref('all')
 const monitorDevices = ref<MonitorDevice[]>([])
 const monitorHistory = ref<MonitorPoint[]>([])
 const loadingMonitoring = ref(true)
+const loadingOverview = ref(true)
 const socketConnected = ref(false)
 const monitoringSeriesState = ref<{ previous: Record<string, { read: number; write: number }> }>({
   previous: {},
@@ -45,10 +54,12 @@ let chart: echarts.ECharts | null = null
 let socket: WebSocket | null = null
 let reconnectTimer: number | undefined
 let statusFallbackTimer: number | undefined
+let overviewRefreshTimer: number | undefined
 let isMounted = false
-const auth = useAuthStore()
 const lastSnapshotAt = ref(0)
 const radialAnimationState = ref<Record<string, { tick: number; direction: 'up' | 'down' }>>({})
+const publicIpReveal = ref(false)
+const publicIpTrigger = ref<HTMLElement | null>(null)
 const handleResize = () => chart?.resize()
 
 const modeLabel = computed(() => (monitorMode.value === 'disk' ? 'Disk I/O' : 'Network I/O'))
@@ -125,12 +136,54 @@ const statusRadialMetrics = computed<RadialMetric[]>(() => {
 
   return metrics
 })
+const overviewStats = computed(() => {
+  const apps = installedApps.value
+
+  const installedCount = apps.length
+  const problemCount = apps.filter((app) => isProblematicApp(app)).length
+  const websiteCount = apps.filter((app) => isWebsiteApp(app)).length
+  const aiModelCount = apps.filter((app) => isAiModelApp(app)).length
+
+  return [
+    {
+      key: 'installed',
+      label: 'Installed apps',
+      value: installedCount,
+      note: 'Recorded through Cerberus',
+    },
+    {
+      key: 'problematic',
+      label: 'Erroring / stalling',
+      value: problemCount,
+      note: 'Containers with issues',
+    },
+    {
+      key: 'websites',
+      label: 'Websites',
+      value: websiteCount,
+      note: 'Tagged as web apps',
+    },
+    {
+      key: 'ai-models',
+      label: 'AI models',
+      value: aiModelCount,
+      note: 'Tagged as AI / model apps',
+    },
+  ]
+})
 
 function formatBytes(value: number) {
-  if (value < 1024) return `${value.toFixed(0)} B`
-  if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`
-  if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`
-  return `${(value / 1024 ** 3).toFixed(1)} GB`
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  let scaled = Math.abs(value)
+  let unitIndex = 0
+
+  while (scaled >= 1024 && unitIndex < units.length - 1) {
+    scaled /= 1024
+    unitIndex += 1
+  }
+
+  const formatted = scaled < 10 && unitIndex > 0 ? scaled.toFixed(2) : scaled.toFixed(1)
+  return `${value < 0 ? '-' : ''}${formatted} ${units[unitIndex]}`
 }
 
 function formatStorageBytes(value: number) {
@@ -139,6 +192,10 @@ function formatStorageBytes(value: number) {
   if (value < 1000 ** 3) return `${(value / 1000 ** 2).toFixed(1)} MB`
   if (value < 1000 ** 4) return `${(value / 1000 ** 3).toFixed(1)} GB`
   return `${(value / 1000 ** 4).toFixed(1)} TB`
+}
+
+function normalizeText(value: unknown) {
+  return String(value ?? '').trim().toLowerCase()
 }
 
 function normalizePercent(value: number | null | undefined) {
@@ -227,6 +284,27 @@ function getDriveTooltip(drive: { label: string; value: number }) {
   ].join('\n')
 }
 
+function isProblematicApp(app: InstalledAppRecord) {
+  const statusText = normalizeText(app.container?.State) + ' ' + normalizeText(app.container?.Status)
+  return /(exited|dead|restarting|unhealthy|paused|removing|created)/.test(statusText)
+}
+
+function isWebsiteApp(app: InstalledAppRecord) {
+  const tokens = [app.category, ...(app.tags ?? []), app.name, app.description]
+    .map(normalizeText)
+    .join(' ')
+
+  return /(website|web app|webapp|web|site|frontend|landing)/.test(tokens)
+}
+
+function isAiModelApp(app: InstalledAppRecord) {
+  const tokens = [app.category, ...(app.tags ?? []), app.name, app.description]
+    .map(normalizeText)
+    .join(' ')
+
+  return /(ai|llm|model|machine learning|ml|artificial intelligence)/.test(tokens)
+}
+
 const cpuTooltipContent = computed(() => {
   const info = systemInfo.value
   const lines = [
@@ -242,6 +320,32 @@ const cpuTooltipContent = computed(() => {
 
   return lines.join('\n')
 })
+
+onClickOutside(publicIpTrigger, () => {
+  publicIpReveal.value = false
+})
+
+useEventListener(window, 'scroll', () => {
+  publicIpReveal.value = false
+}, { passive: true })
+
+function togglePublicIpReveal() {
+  if (!systemInfo.value?.publicIp) {
+    return
+  }
+
+  publicIpReveal.value = !publicIpReveal.value
+}
+
+function revealPublicIp() {
+  if (systemInfo.value?.publicIp) {
+    publicIpReveal.value = true
+  }
+}
+
+function hidePublicIp() {
+  publicIpReveal.value = false
+}
 
 const ramTooltipContent = computed(() => {
   const memory = systemStatus.value?.memory
@@ -322,18 +426,10 @@ function selectDevice(key: string) {
 }
 
 function getSocketUrl() {
-  const baseUrl =
+  return (
     import.meta.env.VITE_WS_URL ??
     `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
-
-  const token = auth.token
-  if (!token) {
-    return baseUrl
-  }
-
-  const url = new URL(baseUrl, window.location.href)
-  url.searchParams.set('token', token)
-  return url.toString()
+  )
 }
 
 function calculateDeltas(snapshot: MonitoringResponse) {
@@ -376,6 +472,17 @@ function calculateDeltas(snapshot: MonitoringResponse) {
 
   monitoringSeriesState.value.previous[currentKey] = aggregate
   monitorHistory.value = [...monitorHistory.value.slice(-29), nextPoint]
+}
+
+async function loadOverviewApps() {
+  loadingOverview.value = true
+  try {
+    installedApps.value = await fetchInstalledApps()
+  } catch (error) {
+    installedApps.value = []
+  } finally {
+    loadingOverview.value = false
+  }
 }
 
 function applySnapshot(payload: {
@@ -489,10 +596,14 @@ watch(monitorMode, async () => {
 onMounted(async () => {
   isMounted = true
   connectSocket()
+  await loadOverviewApps()
   window.addEventListener('resize', handleResize)
   statusFallbackTimer = window.setInterval(() => {
     void refreshStatusFallback()
   }, 1000)
+  overviewRefreshTimer = window.setInterval(() => {
+    void loadOverviewApps()
+  }, 15000)
 })
 
 onBeforeUnmount(() => {
@@ -502,6 +613,9 @@ onBeforeUnmount(() => {
   }
   if (statusFallbackTimer) {
     window.clearInterval(statusFallbackTimer)
+  }
+  if (overviewRefreshTimer) {
+    window.clearInterval(overviewRefreshTimer)
   }
   socket?.close()
   window.removeEventListener('resize', handleResize)
@@ -516,11 +630,27 @@ onBeforeUnmount(() => {
         <div class="flex items-start justify-between">
           <div>
             <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">Overview</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400">Leave this empty for now.</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              Live snapshot of installed apps and app-store metadata.
+            </p>
           </div>
         </div>
-        <div class="mt-6 rounded-xl border border-dashed border-gray-200 p-8 text-sm text-gray-400 dark:border-gray-800">
-          Empty by design.
+        <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div
+            v-for="stat in overviewStats"
+            :key="stat.key"
+            class="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.03]"
+          >
+            <div class="text-theme-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              {{ stat.label }}
+            </div>
+            <div class="mt-3 text-3xl font-semibold text-gray-800 dark:text-white/90">
+              {{ loadingOverview ? '—' : stat.value }}
+            </div>
+            <div class="mt-2 text-theme-xs text-gray-400 dark:text-gray-500">
+              {{ stat.note }}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -598,7 +728,6 @@ onBeforeUnmount(() => {
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">Monitoring</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400">Line graph updates every second.</p>
           </div>
 
           <div class="flex flex-wrap items-center gap-3">
@@ -678,6 +807,28 @@ onBeforeUnmount(() => {
         <div class="flex items-center justify-between border-b border-gray-100 py-2 dark:border-gray-800">
           <span class="text-theme-sm text-gray-500 dark:text-gray-400">CPU</span>
           <span class="text-theme-sm font-medium text-gray-800 dark:text-white/90">{{ systemInfo?.cpu ?? '—' }}</span>
+        </div>
+        <div class="flex items-center justify-between border-b border-gray-100 py-2 dark:border-gray-800">
+          <span class="text-theme-sm text-gray-500 dark:text-gray-400">Local IP</span>
+          <span class="text-theme-sm font-medium text-gray-800 dark:text-white/90">
+            {{ systemInfo?.localIp ?? '—' }}
+          </span>
+        </div>
+        <div class="flex items-center justify-between border-b border-gray-100 py-2 dark:border-gray-800">
+          <span class="text-theme-sm text-gray-500 dark:text-gray-400">Public IP</span>
+          <button
+            ref="publicIpTrigger"
+            type="button"
+            class="text-theme-sm font-medium text-gray-800 transition duration-150 ease-out focus:outline-none dark:text-white/90"
+            :class="systemInfo?.publicIp ? [publicIpReveal ? 'blur-none' : 'blur-sm', 'cursor-pointer select-none'] : ''"
+            @click="togglePublicIpReveal"
+            @mouseenter="revealPublicIp"
+            @mouseleave="hidePublicIp"
+            @focus="revealPublicIp"
+            @blur="hidePublicIp"
+          >
+            {{ systemInfo?.publicIp ?? 'Unavailable' }}
+          </button>
         </div>
         <div v-if="systemInfo?.gpuPresent" class="flex items-center justify-between py-2">
           <span class="text-theme-sm text-gray-500 dark:text-gray-400">GPU / Cores</span>

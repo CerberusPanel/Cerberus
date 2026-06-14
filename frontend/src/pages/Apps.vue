@@ -2,9 +2,10 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Shield } from 'lucide-vue-next'
+import { fontAwesomeIcons } from '../lib/fontawesome'
 import {
   fetchInstalledApps,
+  syncAllAppStores,
   type InstalledAppRecord,
 } from '../services/api'
 
@@ -13,6 +14,7 @@ const router = useRouter()
 const installedApps = ref<InstalledAppRecord[]>([])
 const loadingInstalled = ref(true)
 const refreshing = ref(false)
+const syncingAll = ref(false)
 
 function formatPorts(ports: NonNullable<InstalledAppRecord['container']>['Ports']) {
   if (!ports?.length) {
@@ -73,6 +75,19 @@ async function refreshInstalledApps() {
   }
 }
 
+async function syncAllStores() {
+  syncingAll.value = true
+  try {
+    await syncAllAppStores()
+    ElMessage.success('All stores synced.')
+    await loadInstalledApps()
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.details ?? 'Unable to sync all stores')
+  } finally {
+    syncingAll.value = false
+  }
+}
+
 function openAppBrowser() {
   router.push('/apps/browser')
 }
@@ -88,7 +103,7 @@ onMounted(async () => {
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div class="space-y-2">
           <div class="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-theme-xs font-medium text-brand-600 dark:border-brand-500/20 dark:bg-brand-500/10 dark:text-brand-300">
-            <Shield class="h-4 w-4" />
+            <FontAwesomeIcon :icon="fontAwesomeIcons.shieldHalved" />
             Installed apps
           </div>
           <div>
@@ -100,6 +115,15 @@ onMounted(async () => {
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
+          <button
+            class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+            type="button"
+            :disabled="syncingAll"
+            @click="syncAllStores"
+          >
+            <FontAwesomeIcon :icon="fontAwesomeIcons.arrowsRotate" :class="{ 'animate-spin': syncingAll }" />
+            {{ syncingAll ? 'Syncing…' : 'Sync all stores' }}
+          </button>
           <button
             class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
             type="button"

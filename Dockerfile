@@ -13,7 +13,8 @@ WORKDIR /app
 
 COPY backend/package*.json ./
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends sqlite3 \
+  && apt-get install -y --no-install-recommends ca-certificates git sqlite3 \
+  && update-ca-certificates \
   && rm -rf /var/lib/apt/lists/* \
   && npm install --omit=dev
 

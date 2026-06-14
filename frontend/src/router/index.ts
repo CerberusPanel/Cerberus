@@ -7,6 +7,7 @@ import Dashboard from '../pages/Dashboard.vue'
 import Containers from '../pages/Containers.vue'
 import Apps from '../pages/Apps.vue'
 import AppBrowser from '../pages/AppBrowser.vue'
+import AppStoreSettings from '../pages/AppStoreSettings.vue'
 import Settings from '../pages/Settings.vue'
 import { useAuthStore } from '../stores/auth'
 
@@ -28,6 +29,7 @@ const router = createRouter({
         { path: 'containers', component: Containers },
         { path: 'apps', component: Apps },
         { path: 'apps/browser', component: AppBrowser },
+        { path: 'apps/settings', component: AppStoreSettings },
         { path: 'settings', component: Settings },
       ],
     },

@@ -1,10 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
-  AUTH_TOKEN_KEY,
-  AUTH_USER_KEY,
   fetchCurrentAuthSession,
   loginWithAccount,
+  logoutFromAccount,
   type AuthLoginResponse,
   type AuthUser,
 } from '../services/api'
@@ -20,59 +19,16 @@ const bootstrapState: AuthBootstrapState = {
 }
 let bootstrapPromise: Promise<void> | null = null
 
-function readStoredUser() {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
-  try {
-    const raw = localStorage.getItem(AUTH_USER_KEY)
-    return raw ? (JSON.parse(raw) as AuthUser) : null
-  } catch (error) {
-    return null
-  }
-}
-
-function applySession(session: AuthLoginResponse) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  localStorage.setItem(AUTH_TOKEN_KEY, session.token)
-  localStorage.setItem(AUTH_USER_KEY, JSON.stringify(session.user))
-}
-
-function clearSession() {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  localStorage.removeItem(AUTH_TOKEN_KEY)
-  localStorage.removeItem(AUTH_USER_KEY)
-}
-
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string>(typeof window === 'undefined' ? '' : localStorage.getItem(AUTH_TOKEN_KEY) ?? '')
-  const user = ref<AuthUser | null>(readStoredUser())
+  const user = ref<AuthUser | null>(null)
   const expiresAt = ref<number | null>(null)
 
-  const isAuthenticated = computed(() => Boolean(token.value))
+  const isAuthenticated = computed(() => Boolean(user.value))
   const displayName = computed(() => user.value?.displayName ?? user.value?.username ?? 'Guest')
 
-  function syncFromStorage() {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    token.value = localStorage.getItem(AUTH_TOKEN_KEY) ?? ''
-    user.value = readStoredUser()
-  }
-
   function setSession(session: AuthLoginResponse) {
-    token.value = session.token
     user.value = session.user
     expiresAt.value = session.expiresAt
-    applySession(session)
   }
 
   async function bootstrap() {
@@ -88,26 +44,14 @@ export const useAuthStore = defineStore('auth', () => {
       bootstrapState.initialized = true
 
       if (typeof window !== 'undefined') {
-        window.addEventListener('storage', syncFromStorage)
-        window.addEventListener('cerberus-auth-invalid', () => {
-          token.value = ''
-          user.value = null
-          expiresAt.value = null
-        })
-      }
-
-      syncFromStorage()
-
-      if (!token.value) {
-        bootstrapState.ready = true
-        return
+        window.addEventListener('cerberus-auth-invalid', clearSession)
       }
 
       try {
         const session = await fetchCurrentAuthSession()
         setSession(session)
       } catch (error) {
-        logout()
+        clearSession()
       } finally {
         bootstrapState.ready = true
       }
@@ -121,10 +65,6 @@ export const useAuthStore = defineStore('auth', () => {
   async function ensureSession() {
     await bootstrap()
 
-    if (!token.value) {
-      return false
-    }
-
     if (user.value) {
       return true
     }
@@ -134,26 +74,34 @@ export const useAuthStore = defineStore('auth', () => {
       setSession(session)
       return true
     } catch (error) {
-      logout()
+      clearSession()
       return false
     }
   }
 
   async function login(username: string, password: string) {
+    // Login the user
     const session = await loginWithAccount(username, password)
+    // Create a user session
     setSession(session)
+    // Return user session code
     return session
   }
 
-  function logout() {
-    clearSession()
-    token.value = ''
+  function clearSession() {
     user.value = null
     expiresAt.value = null
   }
 
+  async function logout() {
+    try {
+      await logoutFromAccount()
+    } finally {
+      clearSession()
+    }
+  }
+
   return {
-    token,
     user,
     expiresAt,
     isAuthenticated,
@@ -163,6 +111,5 @@ export const useAuthStore = defineStore('auth', () => {
     ensureSession,
     login,
     logout,
-    syncFromStorage,
   }
 })
