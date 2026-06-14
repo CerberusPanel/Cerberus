@@ -28,9 +28,9 @@ prompt_value() {
 	local prompt_default="$3"
 	local value=""
 
-	echo ""
-	echo "=== ${prompt_title} ==="
-	echo "${prompt_desc}"
+	echo "" </dev/tty
+	echo "=== ${prompt_title} ===" </dev/tty
+	echo "${prompt_desc}" </dev/tty
 	read -r -p "[${prompt_default}]: " value </dev/tty
 	printf '%s\n' "${value:-$prompt_default}"
 }
