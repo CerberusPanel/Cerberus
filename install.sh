@@ -27,7 +27,7 @@ prompt_value() {
 	local default_value="$2"
 	local value=""
 
-	read -r -p "${prompt_text} [${default_value}]: " value
+	read -r -p "${prompt_text} [${default_value}]: " value </dev/tty
 	printf '%s\n' "${value:-$default_value}"
 }
 
@@ -36,7 +36,7 @@ prompt_secret() {
 	local value=""
 
 	while true; do
-		read -r -s -p "${prompt_text}: " value
+		read -r -s -p "${prompt_text} [${default_value}]: " value </dev/tty
 		printf '\n'
 		if [[ -n "${value}" ]]; then
 			printf '%s\n' "${value}"
