@@ -39,7 +39,7 @@ It is designed for homelabs, personal servers, and small self-hosted environment
 Run the installer from the repository root:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CerberusPanel/Cerberus/refs/heads/Release/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/CerberusPanel/Cerberus/refs/heads/Release/install.sh | sudo bash
 ```
 
 The installer prompts for:

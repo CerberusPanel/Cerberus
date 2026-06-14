@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_URL="https://github.com/CerberusPanel/Cerberus.git"
+REPO_BRANCH="Release"
+TMP_DIR="$(mktemp -d)"
+
+cleanup() {
+  rm -rf "${TMP_DIR}"
+}
+trap cleanup EXIT
+
+REPO_DIR="${TMP_DIR}/cerberus"
 INSTALL_DIR_DEFAULT="/opt/cerberus"
 DATA_DIR_DEFAULT="/var/lib/cerberus/data"
 ENV_DIR="/etc/cerberus"
@@ -86,6 +94,10 @@ install_node_if_needed() {
   echo "Installing Node.js 22 from NodeSource..."
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y nodejs
+}
+
+clone_repository() {
+  git clone --depth 1 --branch "${REPO_BRANCH}" "${REPO_URL}" "${REPO_DIR}"
 }
 
 build_and_install_app() {
@@ -197,6 +209,7 @@ main() {
   master_password="$(prompt_secret "Master password")"
   master_display_name="$(prompt_value "Master display name" "Master Admin")"
 
+  clone_repository
   install_prerequisites
   install_node_if_needed
 
@@ -210,6 +223,7 @@ main() {
   chown -R "${SERVICE_USER}:${SERVICE_GROUP}" /var/lib/cerberus
 
   build_and_install_app "${install_dir}"
+  chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${install_dir}"
 
   write_env_file "${install_dir}" "${master_username}" "${master_password}" "${master_display_name}"
   write_service_file "${install_dir}"
