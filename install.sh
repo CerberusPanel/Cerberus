@@ -23,20 +23,28 @@ APP_PORT_DEFAULT="4000"
 
 
 prompt_value() {
-	local prompt_text="$1"
-	local default_value="$2"
+	local prompt_title="$1"
+	local prompt_desc="$2"
+	local prompt_default="$3"
 	local value=""
 
-	read -r -p "${prompt_text} [${default_value}]: " value </dev/tty
-	printf '%s\n' "${value:-$default_value}"
+	echo ""
+	echo "=== ${prompt_title} ==="
+	echo "${prompt_desc}"
+	read -r -p "[${default_value}]: " value </dev/tty
+	printf '%s\n' "${value:-$prompt_default}"
 }
 
 prompt_secret() {
-	local prompt_text="$1"
+	local prompt_title="$1"
+	local prompt_desc="$2"
 	local value=""
 
 	while true; do
-		read -r -s -p "${prompt_text}: " value </dev/tty
+		echo ""
+		echo "=== ${prompt_title} ==="
+		echo "${prompt_desc}"
+		read -r -s -p ": " value </dev/tty
 		printf '\n'
 		if [[ -n "${value}" ]]; then
 			printf '%s\n' "${value}"
@@ -239,10 +247,14 @@ main() {
 EOF
 
 	local install_dir master_username master_password master_display_name
-	install_dir="$(prompt_value "Install directory" "${INSTALL_DIR_DEFAULT}")"
-	master_username="$(prompt_value "Master username" "admin")"
-	master_password="$(prompt_secret "Master password")"
-	master_display_name="$(prompt_value "Master display name" "Master Admin")"
+	
+	install_dir="$(prompt_value "Install directory" "description" "${INSTALL_DIR_DEFAULT}")"
+	
+	master_username="$(prompt_value "Master username" "description" "admin")"
+	
+	master_password="$(prompt_secret "Master password" "description")"
+
+	master_display_name="$(prompt_value "Master display name" "description" "Master Admin")"
 
 	echo "Installing prerequisites"
 	install_prerequisites
