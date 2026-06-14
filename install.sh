@@ -25,7 +25,7 @@ APP_PORT_DEFAULT="4000"
 prompt_value() {
 	local prompt_title="$1"
 	local prompt_desc="$2"
-	local prompt_default="$3"
+	local prompt_default="${3:-}"
 	local value=""
 
 	echo
@@ -256,9 +256,9 @@ EOF
 	local install_dir master_username master_password master_display_name
 	
 	install_dir="$(prompt_value "Install directory" "Where should Cerberus be installed?" "${INSTALL_DIR_DEFAULT}")"
-	master_username="$(prompt_value "Master username" "The administrator username used to access Cerberus." "admin")"
-	master_password="$(prompt_secret "Master password" "The administrator password used to access Cerberus.")"
-	master_display_name="$(prompt_value "Master display name" "The administrator's name." "Master Admin")"
+	master_username="$(prompt_value "Master username" "Choose the admin username for logging into Cerberus." "admin")"
+	master_password="$(prompt_secret "Master password" "Choose the admin password for logging into Cerberus.")"
+	master_display_name="$(prompt_value "Master display name" "Display name shown for the main admin account." "Master Admin")"
 
 	echo "Installing prerequisites"
 	install_prerequisites
