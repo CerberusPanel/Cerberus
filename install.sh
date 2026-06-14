@@ -31,7 +31,7 @@ prompt_value() {
 	echo ""
 	echo "=== ${prompt_title} ==="
 	echo "${prompt_desc}"
-	read -r -p "[${default_value}]: " value </dev/tty
+	read -r -p "[${prompt_default}]: " value </dev/tty
 	printf '%s\n' "${value:-$prompt_default}"
 }
 
