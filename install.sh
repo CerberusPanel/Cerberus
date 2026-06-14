@@ -21,7 +21,7 @@ SERVICE_USER="cerberus"
 SERVICE_GROUP="cerberus"
 APP_PORT_DEFAULT="4000"
 
-print_logo {
+print_logo () {
 	echo
 	echo "                                                                    @@@@@@@@@@@@@@@@@@                                                                     "
 	echo "                                                              @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                                                               "
