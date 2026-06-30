@@ -3,9 +3,9 @@ set -euo pipefail
 
 SERVICE_NAME="cerberus"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-ENV_FILE="/etc/cerberus/cerberus.env"
-CLI_TARGET="/usr/local/bin/cerberus"
-DEFAULT_INSTALL_DIR="/opt/cerberus"
+ENV_FILE="/etc/${SERVICE_NAME}/${SERVICE_NAME}.env"
+CLI_TARGET="/usr/local/bin/${SERVICE_NAME}"
+DEFAULT_INSTALL_DIR="/opt/${SERVICE_NAME}"
 
 if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   exec sudo -E "$0" "$@"
@@ -31,6 +31,14 @@ get_install_dir() {
 service_action() {
   local action="$1"
   systemctl "${action}" "${SERVICE_NAME}.service"
+}
+
+status_action() {
+  systemctl status "${SERVICE_NAME}.service" --no-pager -l
+}
+
+logs_action() {
+  journalctl -u "${SERVICE_NAME}.service" "${@:-}" --no-pager
 }
 
 confirm() {
@@ -103,7 +111,10 @@ case "${1:-}" in
     service_action restart
     ;;
   status)
-    service_action status
+    status_action
+    ;;
+  logs)
+    journalctl -u "${SERVICE_NAME}.service" -f
     ;;
   update)
     update_service
@@ -113,7 +124,7 @@ case "${1:-}" in
     ;;
   ""|-h|--help|help)
     cat <<'EOF'
-Usage: cerberus <start|stop|reboot|restart|status|update|uninstall>
+Usage: cerberus <start|stop|restart|reboot|status|logs|update|uninstall>
 EOF
     ;;
   *)

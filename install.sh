@@ -97,6 +97,10 @@ prompt_secret() {
 	done
 }
 
+get_server_ip() {
+  hostname -I | awk '{print $1}'
+}
+
 quote_env_value() {
 	local value="$1"
 	value="${value//\\/\\\\}"
@@ -352,6 +356,7 @@ EOF
 	echo
 	success "Cerberus Panel installed."
 	info "Open: http://localhost:${APP_PORT_DEFAULT}"
+	info "Open on LAN:  http://${SERVER_IP}:${APP_PORT}"
 	info "Service: systemctl status cerberus"
 }
 
